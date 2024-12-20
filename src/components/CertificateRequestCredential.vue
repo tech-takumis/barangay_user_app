@@ -109,10 +109,9 @@ const goBack = () => {
 }
 
 const deleteCertificate = async () =>{
-   console.log('Deleting certificate with ID:', request.value.id);
     try {
       await store.deleteCertificate(request.value.id);
-      router.push({name: 'dashboard'})
+      router.push({name: 'certificate_requested'})
 
     } catch(error){
       console.log('An error occurred while deleting the request')

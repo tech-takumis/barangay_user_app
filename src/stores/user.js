@@ -2,6 +2,7 @@ import {axios,setBearerToken} from '@/lib/axios'
 import { useStorage } from '@vueuse/core'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import swal from 'sweetalert'
+import { initializeEcho,disconnectEcho } from '../services/echo'
 
 const csrf = () => axios.get('/sanctum/csrf-cookie')
 
@@ -17,7 +18,8 @@ export const useUsers = defineStore('users', {
             isOpen: false,
             title: '',
             message: ''
-        }
+        },
+        echoNotificationListener: false,
     }),
 
     getters: {
@@ -25,6 +27,7 @@ export const useUsers = defineStore('users', {
         hasUserData: state => Object.keys(state.userData).length > 0,
         hasCertificateRequest: state => Object.keys(state.certificateRequest).length > 0,
         hasCertificate: state => Object.keys(state.certificates).length > 0,
+        hasAnnouncement: state => Object.keys(state.announcement).length > 0,
         hasVerified: state =>
             Object.keys(state.userData).length > 0
                 ? state.userData.email_verified_at !== null
@@ -60,15 +63,23 @@ export const useUsers = defineStore('users', {
             this.showNotification('Certificate Deleted', `The certificate "${certificate.certificate_name}" has been deleted.`)  
         },
         handleApprovedCertificate(certificate){
-            const index = this.certificateRequest.findIndex(req => req.id === certificate.certificate_request_id)
+            const index = this.certificateRequest.findIndex(req => req.id === certificate.id)
             
             if(index != -1){
                 this.certificateRequest[index].status = 'approved'
             }
-            this.showNotification('Certificate approved', `Certificate request "${certificate.certificate_name}" has been approved`)
+            this.showNotification('Certificate approved', `Certificate request "${certificate.certificate.name}" has been approved`)
+        },
+        handleRejectCertificateRequest(certificate){
+            const index = this.certificateRequest.findIndex(req => req.id === certificate.id)
+            
+            if(index != -1){
+                this.certificateRequest[index].status = certificate.status
+            }
+            this.showNotification('Certificate rejected', `Certificate request "${certificate.certificate_name}" has been rejected`)
         },
         async getData() {
-            axios
+            await axios
                 .get('/api/user')
                 .then(response => {
                     this.userData = response.data
@@ -81,7 +92,7 @@ export const useUsers = defineStore('users', {
         },
         async sendMessage(form){
 
-            axios
+            await axios
                 .post('/api/user/messages',form.value)
                     .then(res=>{
                         this.messages.push(res.data)
@@ -91,7 +102,7 @@ export const useUsers = defineStore('users', {
                     })
         },
         async getCertificates(){
-            axios   
+            await axios   
                 .get('/api/certificates')
                     .then(res=>{
                         this.certificates = res.data.certificate
@@ -111,10 +122,9 @@ export const useUsers = defineStore('users', {
             }
         },       
         async getCertificateRequest(){
-            axios  
+            await axios  
                 .get('/api/certificates/requests/my-requests')
                     .then(response=>{
-                        console.log('Certificate Requested:', response.data)
                         this.certificateRequest = response.data
                     })
                     .catch(error=>{
@@ -134,8 +144,11 @@ export const useUsers = defineStore('users', {
                await axios
                     .post('/api/certificates/requests', form)
                     .then(res=>{
-                        swal('Created Successfully',res.data.message,'success')
-                        this.router.push({name: 'dashboard'})
+                        this.certificateRequest.unshift(res.data.request)
+                        this.router.push({name: 'certificate_requested'})
+                    })
+                    .catch(error=>{
+                        console.log("Error while fetching certificate request")
                     })
           },          
         async register(form, setErrors, processing) {
@@ -173,9 +186,12 @@ export const useUsers = defineStore('users', {
                 .then(response => {
                     this.authStatus = response.status
                     processing.value = false
-                    console.log(response.data.token)
-                    setBearerToken(response.data.token)
-                    localStorage.setItem('authToken',response.data.token)
+                    const token = response.data.token
+                    console.log(token)
+                    setBearerToken(token)
+                    localStorage.setItem('authToken',token)
+
+                    initializeEcho(token)
                     
                     this.router.push({ name: 'dashboard' })
                 })
@@ -199,10 +215,8 @@ export const useUsers = defineStore('users', {
         async deleteCertificate(id) {
             try {
                 const response = await axios.delete(`/api/certificates/requests/${id}`);
-                console.log(response.data.message);
                 swal('Deleted Successfully',response.data.message,'success')
       
-                //Update the list
                  this.certificateRequest = this.certificateRequest.filter(req => req.id !== id);
       
                 return response.data
@@ -239,7 +253,7 @@ export const useUsers = defineStore('users', {
 
             processing.value = true
 
-            axios
+            await axios
                 .post('/user/reset-password', form.value)
                 .then(response => {
                     this.router.push(
@@ -270,7 +284,9 @@ export const useUsers = defineStore('users', {
                 .post('/user/logout')
                 .then(() => {
                     this.$reset()
-
+                    localStorage.removeItem('authToken')
+                    disconnectEcho()
+                    console.log("User  logout and echo disconnected")
                     this.router.push({ name: 'welcome' })
                 })
                 .catch(error => {

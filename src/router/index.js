@@ -17,12 +17,12 @@ const routes = [
                 {
                     name: 'Welcome',
                     content:
-                        'An application / authentication starter kit frontend in Vue.js 3 for Laravel Breeze.',
+                        'An application for requesting barangay certificate.',
                 },
                 {
                     property: 'og:Welcome',
                     content:
-                        'An application / authentication starter kit frontend in Vue.js 3 for Laravel Breeze.',
+                        'An application for requesting barangay certificate.',
                 },
             ],
         },

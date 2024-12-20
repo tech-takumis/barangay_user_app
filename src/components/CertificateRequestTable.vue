@@ -58,7 +58,7 @@
                     <div class="text-sm font-medium text-gray-900">{{ request.id }}</div>
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap">
-                    <div class="text-sm text-gray-900">{{ getCertificateName(request.certificate_id) }}</div>
+                    <div class="text-sm text-gray-900">{{ request.certificate.name }}</div>
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap">
                     <span class="flex items-center justify-center">
@@ -186,7 +186,7 @@ const getStatusIcon = (status) => {
       return ClockIcon
     case 'approved':
       return CheckCircleIcon
-    case 'rejected':
+    case 'reject':
       return XCircleIcon
     default:
       return null
@@ -209,12 +209,6 @@ const getStatusColor = (status) => {
 const navigateToCredentials = (id) => {
   router.push({ name: 'CertificateRequestCredential', params: { id: id } })
 }
-
-const getCertificateName = (certificateId) => {
-  const cert = store.certificates.find(cert => cert.id === certificateId);
-  return cert ? cert.name : 'Unknown Certificate';
-};
-
 
 const formatDate = (dateString) => {
   return new Date(dateString).toLocaleDateString('en-US', {

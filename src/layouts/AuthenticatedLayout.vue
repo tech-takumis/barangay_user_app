@@ -20,7 +20,7 @@
                                         Dashboard
                                     </NavLink>
                                 </router-link>
-                                <router-link v-slot="{ href}" to="/certificate/requested" custom>
+                                <router-link v-slot="{ href }" to="/certificate/requested" custom>
                                     <NavLink :href="href">
                                         Certificate Requested
                                     </NavLink>
@@ -120,12 +120,8 @@
             </main>
 
             <!-- Notification Modal -->
-            <NotificationModal
-                :is-open="store.notificationModal.isOpen"
-                :title="store.notificationModal.title"
-                :message="store.notificationModal.message"
-                @close="store.closeNotification"
-            />
+            <NotificationModal :is-open="store.notificationModal.isOpen" :title="store.notificationModal.title"
+                :message="store.notificationModal.message" @close="store.closeNotification" />
         </div>
     </div>
 </template>
@@ -138,48 +134,75 @@ import Dropdown from '@/components/Dropdown.vue';
 import DropdownLink from '@/components/DropdownLink.vue';
 import NavLink from '@/components/NavLink.vue';
 import ResponsiveNavLink from '@/components/ResponsiveNavLink.vue';
-import echo from '../lib/echo';
+import { getEchoInstance } from '../services/echo';
 import NotificationModal from '../components/NotificationModal.vue';
 
+const echo = getEchoInstance()
 const showingNavigationDropdown = ref(false);
 const store = useUsers();
 const auth = store.authUser;
 
+
+const subscribeToNotificationChannel = () => {
+    if(echo && !store.echoNotificationListener){
+        echo.private('user.notifications')
+            .listen('NewCertificateEvent', (event) => {
+                console.log("New Certificate", event)
+                store.handleNewCertificate(event)
+            })
+            .listen('DeleteCertificateEvent', (event) => {
+                console.log("Delete certificate", event)
+                store.handleCertificateDeleted(event)
+            })
+            store.echoNotificationListener = true
+    }
+}
+
+const subscribeToApprovedChannel = () => {
+     if(echo && store.userData?.id){
+         echo.private(`user.certificate.request.${store.userData.id}`)
+             .listen('ApprovedCertificateEvent', (event) => {
+                 store.handleApprovedCertificate(event);
+             })
+             .listen('RejectCertificateRequestEvent', (event) => {
+                console.log("Certificate rejected: ",event)
+                 store.handleRejectCertificateRequest(event);
+             });
+
+     }
+     store.echoCertificateApprovalListener = true
+}
+
+const unsubscribeFromApprovedChannel = () => {
+     if(echo && store.userData?.id){
+         echo.leave(`user.certificate.approved.${store.userData.id}`);
+     }
+}
+
 onMounted(async () => {
     if (!store.hasUserData) {
         await store.getData();
-
-        echo.private('user.notifications')
-        .listen('AnnouncementEvent', (event) => {
-            store.announcement.unshift(event);
-        })
-        .listen('NewCertificateEvent', (event) => {
-            store.handleNewCertificate(event);
-        })
-        .listen('DeleteCertificateEvent', (event) => {
-            store.handleCertificateDeleted(event);
-        });
     }
-
-        await store.getCertificates();
+    if (!store.hasCertificateRequest) {
         await store.getCertificateRequest();
+    }
+
+    if (!store.hasCertificate) {
+        await store.getCertificates();
+    }
+    if (!store.hasAnnouncement) {
         await store.getLatestAnnouncement();
+    }
+
+    subscribeToNotificationChannel()
+    subscribeToApprovedChannel()
 });
 
-watch(() => store.userData?.id, (newId, oldId) => {
-    if (oldId) {
-        echo.leave(`user.certificate.approved.${oldId}`);
-    }
-    if (newId) {
-        echo.private(`user.certificate.approved.${newId}`)
-            .listen('ApprovedCertificateEvent', (event) => {
-                console.log("Certificate Approved");
-                store.handleApprovedCertificate(event);
-            });
-    } else {
-        console.warn("Skipping channel subscription due to undefined user ID.");
-    }
-});
+onUnmounted(() => {
+   if(echo && store.userData){
+        unsubscribeFromApprovedChannel()
+   }
+})
 
 
 const user = computed(() => store.userData);
